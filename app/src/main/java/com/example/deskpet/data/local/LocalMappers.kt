@@ -27,6 +27,9 @@ fun PetProfile.toEntity(): PetProfileEntity = PetProfileEntity(
     stageTheme = stageTheme,
     accentEmoji = accentEmoji,
     actionHint = actionHint,
+    imageScale = imageScale,
+    imageOffsetX = imageOffsetX,
+    imageOffsetY = imageOffsetY,
     seed = seed,
     createdAt = createdAt
 )
@@ -73,6 +76,9 @@ fun PetProfileEntity.toModel(): PetProfile {
         stageTheme = stageTheme.ifBlank { fallback.stageTheme },
         accentEmoji = accentEmoji.ifBlank { fallback.accentEmoji },
         actionHint = actionHint.ifBlank { fallback.actionHint },
+        imageScale = imageScale.coerceIn(0.75f, 2.4f),
+        imageOffsetX = imageOffsetX.coerceIn(-80f, 80f),
+        imageOffsetY = imageOffsetY.coerceIn(-90f, 90f),
         seed = seed,
         createdAt = createdAt
     )

@@ -30,6 +30,16 @@ data class BackendImageResponse(
     val description: String
 )
 
+data class BackendCutoutResponse(
+    val success: Boolean,
+    val mode: String,
+    val message: String,
+    val imageUrl: String?,
+    val processedImagePath: String?,
+    val suggestedCrop: String,
+    val confidence: Float
+)
+
 class DeskPetBackendClient(
     private val baseUrl: String = "http://10.0.2.2:8000"
 ) {
@@ -73,31 +83,7 @@ class DeskPetBackendClient(
     suspend fun uploadPetImage(context: Context, uriString: String): BackendImageResponse? {
         return withContext(Dispatchers.IO) {
             runCatching {
-                val uri = Uri.parse(uriString)
-                val boundary = "DeskPetBoundary${System.currentTimeMillis()}"
-                val connection = openConnection("/api/pet/from-image").apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                }
-
-                connection.outputStream.use { outputStream ->
-                    BufferedWriter(OutputStreamWriter(outputStream, Charsets.UTF_8)).use { writer ->
-                        writer.append("--$boundary\r\n")
-                        writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"pet-image.jpg\"\r\n")
-                        writer.append("Content-Type: image/jpeg\r\n\r\n")
-                        writer.flush()
-
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            input.copyTo(outputStream)
-                        }
-                        outputStream.flush()
-
-                        writer.append("\r\n--$boundary--\r\n")
-                        writer.flush()
-                    }
-                }
-
-                val json = JSONObject(readResponse(connection))
+                val json = JSONObject(postMultipartImage(context, uriString, "/api/pet/from-image"))
                 BackendImageResponse(
                     petName = json.optString("pet_name", ""),
                     personality = json.optString("personality", ""),
@@ -114,6 +100,23 @@ class DeskPetBackendClient(
         }
     }
 
+    suspend fun requestPetCutout(context: Context, uriString: String): BackendCutoutResponse? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val json = JSONObject(postMultipartImage(context, uriString, "/api/pet/cutout"))
+                BackendCutoutResponse(
+                    success = json.optBoolean("success", false),
+                    mode = json.optString("mode", "soft_cutout"),
+                    message = json.optString("message", ""),
+                    imageUrl = json.optString("image_url", "").takeIf { it.isNotBlank() },
+                    processedImagePath = json.optString("processed_image_path", "").takeIf { it.isNotBlank() },
+                    suggestedCrop = json.optString("suggested_crop", "center"),
+                    confidence = json.optDouble("confidence", 0.5).toFloat()
+                )
+            }.getOrNull()
+        }
+    }
+
     private fun postJson(path: String, body: String): String {
         val connection = openConnection(path).apply {
             requestMethod = "POST"
@@ -123,6 +126,34 @@ class DeskPetBackendClient(
         connection.outputStream.use { outputStream ->
             outputStream.write(body.toByteArray(Charsets.UTF_8))
         }
+        return readResponse(connection)
+    }
+
+    private fun postMultipartImage(context: Context, uriString: String, path: String): String {
+        val uri = Uri.parse(uriString)
+        val boundary = "DeskPetBoundary${System.currentTimeMillis()}"
+        val connection = openConnection(path).apply {
+            requestMethod = "POST"
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        }
+
+        connection.outputStream.use { outputStream ->
+            BufferedWriter(OutputStreamWriter(outputStream, Charsets.UTF_8)).use { writer ->
+                writer.append("--$boundary\r\n")
+                writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"pet-image.jpg\"\r\n")
+                writer.append("Content-Type: image/jpeg\r\n\r\n")
+                writer.flush()
+
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.copyTo(outputStream)
+                }
+                outputStream.flush()
+
+                writer.append("\r\n--$boundary--\r\n")
+                writer.flush()
+            }
+        }
+
         return readResponse(connection)
     }
 

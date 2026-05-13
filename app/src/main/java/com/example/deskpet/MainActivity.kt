@@ -60,6 +60,8 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
             onFeedPet = viewModel::feedPet,
             onRegeneratePet = viewModel::regeneratePet,
             onImageSelected = viewModel::updatePetImage,
+            onImageTransformChanged = viewModel::updatePetImageTransform,
+            onResetImageTransform = viewModel::resetPetImageTransform,
             onOpenChat = viewModel::goToChat,
             onOpenDiary = viewModel::goToDiary,
             onOpenSettings = viewModel::goToSettings

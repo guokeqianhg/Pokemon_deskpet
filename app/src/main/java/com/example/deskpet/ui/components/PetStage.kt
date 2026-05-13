@@ -110,20 +110,20 @@ fun PetStage(
     ) {
         Box(
             modifier = Modifier
-                .size(width = 308.dp, height = 342.dp)
+                .size(width = 284.dp, height = 306.dp)
                 .clip(RoundedCornerShape(34.dp))
                 .background(Brush.verticalGradient(colors))
-                .padding(14.dp),
+                .padding(15.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(238.dp)
+                    .size(212.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
-                            listOf(Color.White.copy(alpha = 0.58f), Color.Transparent)
+                            listOf(Color.White.copy(alpha = 0.46f), Color.White.copy(alpha = 0.08f), Color.Transparent)
                         )
                     )
             )
@@ -141,9 +141,9 @@ fun PetStage(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .offset(y = (-26).dp)
-                    .size(width = 154.dp, height = 24.dp)
-                    .graphicsLayer { alpha = 0.22f }
+                    .offset(y = (-32).dp)
+                    .size(width = 132.dp, height = 18.dp)
+                    .graphicsLayer { alpha = 0.11f }
                     .clip(CircleShape)
                     .background(Color.Black)
             )
@@ -152,6 +152,9 @@ fun PetStage(
                 SoftImageGlow(
                     imageUri = profile.imageUri,
                     profile = profile,
+                    imageScale = profile.imageScale,
+                    imageOffsetX = profile.imageOffsetX,
+                    imageOffsetY = profile.imageOffsetY,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .offset(y = floatOffset.dp)
@@ -170,7 +173,7 @@ fun PetStage(
                         scaleY = breathe * actionScale
                         rotationZ = rotation
                     }
-                    .shadow(22.dp, imageMode.shape, clip = false)
+                    .shadow(18.dp, imageMode.shape, clip = false)
                     .clip(imageMode.shape)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.74f))
                     .softEdgeFade(imageMode)
@@ -181,7 +184,14 @@ fun PetStage(
                     SubcomposeAsyncImage(
                         model = profile.imageUri,
                         contentDescription = "宠物图片",
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = profile.imageScale.coerceIn(0.75f, 2.4f)
+                                scaleY = profile.imageScale.coerceIn(0.75f, 2.4f)
+                                translationX = profile.imageOffsetX.coerceIn(-80f, 80f)
+                                translationY = profile.imageOffsetY.coerceIn(-90f, 90f)
+                            },
                         contentScale = imageMode.contentScale,
                         loading = { DefaultPetFace(profile) },
                         error = { DefaultPetFace(profile) }
@@ -200,13 +210,14 @@ fun PetStage(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 12.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f)),
+                tonalElevation = 1.dp
             ) {
                 Text(
                     text = bubbleText.ifBlank { statusBubble(profile) },
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
                 )
@@ -225,6 +236,9 @@ fun PetStage(
 private fun SoftImageGlow(
     imageUri: String,
     profile: PetProfile,
+    imageScale: Float,
+    imageOffsetX: Float,
+    imageOffsetY: Float,
     modifier: Modifier = Modifier
 ) {
     SubcomposeAsyncImage(
@@ -233,9 +247,11 @@ private fun SoftImageGlow(
         modifier = modifier
             .size(width = 250.dp, height = 274.dp)
             .graphicsLayer {
-                alpha = 0.22f
-                scaleX = 1.1f
-                scaleY = 1.1f
+                alpha = 0.18f
+                scaleX = 1.08f * imageScale.coerceIn(0.75f, 2.4f)
+                scaleY = 1.08f * imageScale.coerceIn(0.75f, 2.4f)
+                translationX = imageOffsetX.coerceIn(-80f, 80f)
+                translationY = imageOffsetY.coerceIn(-90f, 90f)
             }
             .clip(RoundedCornerShape(46.dp))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.28f)),
@@ -283,17 +299,17 @@ private fun DefaultPetFace(profile: PetProfile) {
 private val PetImageMode.width
     get() = when (this) {
         PetImageMode.FullCard -> 222.dp
-        PetImageMode.PortraitCrop -> 214.dp
-        PetImageMode.SoftCutout -> 214.dp
-        PetImageMode.CirclePet -> 218.dp
+        PetImageMode.PortraitCrop -> 204.dp
+        PetImageMode.SoftCutout -> 204.dp
+        PetImageMode.CirclePet -> 206.dp
     }
 
 private val PetImageMode.height
     get() = when (this) {
         PetImageMode.FullCard -> 246.dp
-        PetImageMode.PortraitCrop -> 248.dp
-        PetImageMode.SoftCutout -> 256.dp
-        PetImageMode.CirclePet -> 218.dp
+        PetImageMode.PortraitCrop -> 236.dp
+        PetImageMode.SoftCutout -> 242.dp
+        PetImageMode.CirclePet -> 206.dp
     }
 
 private val PetImageMode.shape: Shape
@@ -330,11 +346,11 @@ private fun Modifier.softEdgeFade(mode: PetImageMode): Modifier {
 }
 
 private fun stageColors(theme: String): List<Color> = when (theme) {
-    "starry" -> listOf(Color(0xFF26384F), Color(0xFF6E93C8), Color(0xFFFFE6A3))
-    "cloud" -> listOf(Color(0xFFEAF7FF), Color(0xFFCFEAFF), Color(0xFFFFF8EA))
-    "forest" -> listOf(Color(0xFFE9F7E8), Color(0xFFCDE8CB), Color(0xFFFFF3D6))
-    "candy" -> listOf(Color(0xFFFFEEF6), Color(0xFFFFC9DE), Color(0xFFFFF1C9))
-    else -> listOf(Color(0xFFFFF4DF), Color(0xFFFFD7A8), Color(0xFFFFF9EE))
+    "starry" -> listOf(Color(0xFFEAF1FF), Color(0xFFC9D9FF), Color(0xFFFFF0B8))
+    "cloud" -> listOf(Color(0xFFF4FBFF), Color(0xFFDDF1FF), Color(0xFFFFF9EE))
+    "forest" -> listOf(Color(0xFFF1FAEE), Color(0xFFD7EED6), Color(0xFFFFF4D8))
+    "candy" -> listOf(Color(0xFFFFF3F8), Color(0xFFFFD8E8), Color(0xFFFFF2CC))
+    else -> listOf(Color(0xFFFFF8E8), Color(0xFFFFE2BA), Color(0xFFFFFAF2))
 }
 
 private fun movementRange(personality: Personality, actionHint: String): Float {

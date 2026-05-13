@@ -179,6 +179,9 @@ class DeskPetRepository(context: Context) {
             stageTheme = json.optString("stageTheme", fallback.stageTheme),
             accentEmoji = json.optString("accentEmoji", fallback.accentEmoji),
             actionHint = json.optString("actionHint", fallback.actionHint),
+            imageScale = json.optDouble("imageScale", fallback.imageScale.toDouble()).toFloat().coerceIn(0.75f, 2.4f),
+            imageOffsetX = json.optDouble("imageOffsetX", fallback.imageOffsetX.toDouble()).toFloat().coerceIn(-80f, 80f),
+            imageOffsetY = json.optDouble("imageOffsetY", fallback.imageOffsetY.toDouble()).toFloat().coerceIn(-90f, 90f),
             seed = json.optLong("seed", fallback.seed),
             createdAt = json.optLong("createdAt", fallback.createdAt)
         )

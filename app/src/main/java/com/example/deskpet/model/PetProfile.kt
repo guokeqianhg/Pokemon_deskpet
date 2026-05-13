@@ -33,6 +33,9 @@ data class PetProfile(
     val stageTheme: String,
     val accentEmoji: String,
     val actionHint: String,
+    val imageScale: Float,
+    val imageOffsetX: Float,
+    val imageOffsetY: Float,
     val seed: Long,
     val createdAt: Long
 )

@@ -61,6 +61,8 @@ async def pet_cutout(file: UploadFile = File(...)) -> CutoutResponse:
         success=result.success,
         mode=result.mode,
         message=result.message,
+        image_url=result.image_url,
+        processed_image_path=result.processed_image_path,
         suggested_crop=result.suggested_crop,
         confidence=result.confidence,
     )

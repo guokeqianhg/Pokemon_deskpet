@@ -27,6 +27,9 @@ fun generateRandomPet(currentImageUri: String?): PetProfile {
         stageTheme = stageThemeFor(personality),
         accentEmoji = accentEmojiFor(personality),
         actionHint = actionHintFor(personality),
+        imageScale = 1f,
+        imageOffsetX = 0f,
+        imageOffsetY = 0f,
         seed = seed,
         createdAt = now
     )

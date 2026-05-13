@@ -36,5 +36,7 @@ class CutoutResponse(BaseModel):
     success: bool
     mode: str
     message: str
+    image_url: str | None = None
+    processed_image_path: str | None = None
     suggested_crop: str = "center"
     confidence: float = 0.5

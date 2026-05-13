@@ -21,7 +21,7 @@ import com.example.deskpet.data.local.entity.PetStatusEntity
         DiaryEntryEntity::class,
         ChatMessageEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class DeskPetDatabase : RoomDatabase() {
@@ -40,7 +40,7 @@ abstract class DeskPetDatabase : RoomDatabase() {
                         context.applicationContext,
                         DeskPetDatabase::class.java,
                         "deskpet.db"
-                    ).addMigrations(MIGRATION_1_2)
+                    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                         .fallbackToDestructiveMigration(false)
                         .build()
                         .also { INSTANCE = it }
@@ -53,6 +53,14 @@ abstract class DeskPetDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE pet_profile ADD COLUMN stageTheme TEXT NOT NULL DEFAULT 'warm'")
                 db.execSQL("ALTER TABLE pet_profile ADD COLUMN accentEmoji TEXT NOT NULL DEFAULT '✨'")
                 db.execSQL("ALTER TABLE pet_profile ADD COLUMN actionHint TEXT NOT NULL DEFAULT 'calm'")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pet_profile ADD COLUMN imageScale REAL NOT NULL DEFAULT 1.0")
+                db.execSQL("ALTER TABLE pet_profile ADD COLUMN imageOffsetX REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE pet_profile ADD COLUMN imageOffsetY REAL NOT NULL DEFAULT 0.0")
             }
         }
     }

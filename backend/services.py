@@ -39,6 +39,8 @@ class CutoutResult:
     success: bool
     mode: str
     message: str
+    image_url: str | None
+    processed_image_path: str | None
     suggested_crop: str
     confidence: float
 
@@ -108,13 +110,30 @@ def build_pet_from_image(filename: str, content: bytes) -> ImagePetResult:
 
 
 def build_pet_cutout(filename: str, content: bytes) -> CutoutResult:
+    real_result = _try_real_cutout(filename=filename, content=content)
+    if real_result is not None:
+        return real_result
+
     return CutoutResult(
         success=True,
         mode="soft_cutout",
         message="当前使用本地主体化展示，后续可接入真实抠图模型",
+        image_url=None,
+        processed_image_path=None,
         suggested_crop="center",
         confidence=0.5 if content or filename else 0.0,
     )
+
+
+def _try_real_cutout(filename: str, content: bytes) -> CutoutResult | None:
+    try:
+        import rembg  # type: ignore  # noqa: F401
+    except Exception:
+        return None
+
+    # 真实抠图预留点：后续可在这里调用 rembg.remove(content)，保存透明 PNG，
+    # 再把 processed_image_path 或 image_url 返回给 Android。
+    return None
 
 
 def _reply_prefix(personality: str) -> str:

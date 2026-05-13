@@ -250,6 +250,19 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                 }
                 persistPet()
 
+                viewModelScope.launch {
+                    val cutout = backendClient.requestPetCutout(getApplication(), cachedUri)
+                    val message = when {
+                        cutout?.mode == "real_cutout" && (cutout.imageUrl != null || cutout.processedImagePath != null) ->
+                            "抠图结果已准备好，后续可以切换为处理图。"
+                        cutout?.mode == "soft_cutout" ->
+                            "已使用柔和主体模式展示。"
+                        else ->
+                            "先用本地展示模式，之后还能升级抠图。"
+                    }
+                    showTransientFeedback(message, durationMillis = 1400L)
+                }
+
                 val response = backendClient.uploadPetImage(getApplication(), cachedUri)
                 if (response != null) {
                     _petProfile.update { profile ->
@@ -261,11 +274,14 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                             favoriteFood = response.favoriteFood.ifBlank { profile.favoriteFood },
                             companionStyle = response.companionStyle.ifBlank { profile.companionStyle },
                             stageTheme = response.stageTheme.ifBlank { profile.stageTheme },
-                            accentEmoji = response.accentEmoji.ifBlank { profile.accentEmoji },
-                            actionHint = response.actionHint.ifBlank { profile.actionHint },
-                            action = PetAction.Happy,
-                            moodText = actionMoodText(PetAction.Happy, response.personality.toPersonalityOrNull() ?: profile.personality)
-                        )
+                        accentEmoji = response.accentEmoji.ifBlank { profile.accentEmoji },
+                        actionHint = response.actionHint.ifBlank { profile.actionHint },
+                        imageScale = 1f,
+                        imageOffsetX = 0f,
+                        imageOffsetY = 0f,
+                        action = PetAction.Happy,
+                        moodText = actionMoodText(PetAction.Happy, response.personality.toPersonalityOrNull() ?: profile.personality)
+                    )
                     }
                     startTransientAction(
                         action = PetAction.Happy,
@@ -283,11 +299,14 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                             favoriteFood = regenerated.favoriteFood,
                             companionStyle = regenerated.companionStyle,
                             stageTheme = regenerated.stageTheme,
-                            accentEmoji = regenerated.accentEmoji,
-                            actionHint = regenerated.actionHint,
-                            seed = regenerated.seed,
-                            action = PetAction.Happy,
-                            moodText = actionMoodText(PetAction.Happy, regenerated.personality)
+                        accentEmoji = regenerated.accentEmoji,
+                        actionHint = regenerated.actionHint,
+                        imageScale = 1f,
+                        imageOffsetX = 0f,
+                        imageOffsetY = 0f,
+                        seed = regenerated.seed,
+                        action = PetAction.Happy,
+                        moodText = actionMoodText(PetAction.Happy, regenerated.personality)
                         )
                     }
                     startTransientAction(
@@ -301,6 +320,22 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                 _isUploading.value = false
             }
         }
+    }
+
+    fun updatePetImageTransform(scale: Float, offsetX: Float, offsetY: Float) {
+        _petProfile.update { profile ->
+            profile.copy(
+                imageScale = scale.coerceIn(MIN_IMAGE_SCALE, MAX_IMAGE_SCALE),
+                imageOffsetX = offsetX.coerceIn(MIN_IMAGE_OFFSET_X, MAX_IMAGE_OFFSET_X),
+                imageOffsetY = offsetY.coerceIn(MIN_IMAGE_OFFSET_Y, MAX_IMAGE_OFFSET_Y)
+            )
+        }
+        showTransientFeedback("形象位置已经保存啦。")
+        persistPet()
+    }
+
+    fun resetPetImageTransform() {
+        updatePetImageTransform(scale = 1f, offsetX = 0f, offsetY = 0f)
     }
 
     fun sendUserMessage(text: String) {
@@ -603,3 +638,10 @@ private fun String.toPersonalityOrNull(): Personality? {
 private fun String.hasAny(vararg keywords: String): Boolean {
     return keywords.any { contains(it, ignoreCase = true) }
 }
+
+private const val MIN_IMAGE_SCALE = 0.75f
+private const val MAX_IMAGE_SCALE = 2.4f
+private const val MIN_IMAGE_OFFSET_X = -80f
+private const val MAX_IMAGE_OFFSET_X = 80f
+private const val MIN_IMAGE_OFFSET_Y = -90f
+private const val MAX_IMAGE_OFFSET_Y = 90f

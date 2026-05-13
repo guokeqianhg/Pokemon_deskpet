@@ -25,9 +25,9 @@ fun PetDecorationLayer(
         Surface(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .offset(x = 24.dp, y = 26.dp),
+                .offset(x = 30.dp, y = 32.dp),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
             tonalElevation = 2.dp
         ) {
             Text(
@@ -40,14 +40,14 @@ fun PetDecorationLayer(
             text = decorationGlyph(profile.decoration, profile.accentEmoji),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset(x = (-34).dp, y = 34.dp)
+                .offset(x = (-46).dp, y = 46.dp)
         )
 
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .offset(x = 38.dp, y = (-42).dp)
-                .size(10.dp)
+                .offset(x = 48.dp, y = (-58).dp)
+                .size(8.dp)
                 .clip(CircleShape)
                 .background(themeDotColor(profile.stageTheme))
         )
