@@ -41,6 +41,8 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
     val chatMessages by viewModel.chatMessages.collectAsState()
     val diaryEntries by viewModel.diaryEntries.collectAsState()
     val isSendingMessage by viewModel.isSendingMessage.collectAsState()
+    val isFeeding by viewModel.isFeeding.collectAsState()
+    val isUploading by viewModel.isUploading.collectAsState()
     val selectedDiaryEntry by viewModel.selectedDiaryEntry.collectAsState()
 
     BackHandler(enabled = currentScreen != AppScreen.Home) {
@@ -52,6 +54,8 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
             petProfile = petProfile,
             petStatus = petStatus,
             feedbackText = feedbackText,
+            isFeeding = isFeeding,
+            isUploading = isUploading,
             onPetClicked = viewModel::onPetClicked,
             onFeedPet = viewModel::feedPet,
             onRegeneratePet = viewModel::regeneratePet,

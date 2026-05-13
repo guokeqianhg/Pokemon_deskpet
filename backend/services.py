@@ -28,6 +28,9 @@ class ImagePetResult:
     decoration: str
     favorite_food: str
     companion_style: str
+    stage_theme: str
+    accent_emoji: str
+    action_hint: str
     description: str
 
 
@@ -70,12 +73,12 @@ def build_pet_from_image(filename: str, content: bytes) -> ImagePetResult:
     personalities = ["Gentle", "Energetic", "Shy", "Foodie", "Tsundere"]
     personality = personalities[index]
 
-    expression, decoration, favorite_food, companion_style = {
-        "Gentle": ("微笑", "小围巾", "热牛奶", "温柔陪伴"),
-        "Energetic": ("星星眼", "小铃铛", "能量果冻", "元气鼓励"),
-        "Shy": ("害羞", "小帽子", "小饼干", "安静倾听"),
-        "Foodie": ("期待", "小饭碗", "草莓蛋糕", "用小点心安慰你"),
-        "Tsundere": ("撇嘴", "小披风", "焦糖布丁", "嘴硬但在乎你"),
+    expression, decoration, favorite_food, companion_style, stage_theme, accent_emoji, action_hint = {
+        "Gentle": ("微笑", "小围巾", "热牛奶", "温柔陪伴", "warm", "🌸", "calm"),
+        "Energetic": ("星星眼", "星星发夹", "能量果冻", "元气鼓励", "starry", "⭐", "bounce"),
+        "Shy": ("害羞", "云朵贴纸", "小饼干", "安静倾听", "cloud", "☁️", "calm"),
+        "Foodie": ("期待", "糖果", "草莓蛋糕", "用小点心安慰你", "candy", "🍬", "sway"),
+        "Tsundere": ("撇嘴", "小帽子", "焦糖布丁", "嘴硬但在乎你", "forest", "🍃", "tilt"),
     }[personality]
 
     names = ["团团", "软糖", "布丁", "栗子", "云朵"]
@@ -88,6 +91,9 @@ def build_pet_from_image(filename: str, content: bytes) -> ImagePetResult:
         decoration=decoration,
         favorite_food=favorite_food,
         companion_style=companion_style,
+        stage_theme=stage_theme,
+        accent_emoji=accent_emoji,
+        action_hint=action_hint,
         description=f"已根据 {filename or '用户图片'} 生成一个{PERSONALITY_NAMES[personality]}风格的桌面宠物占位结果。",
     )
 

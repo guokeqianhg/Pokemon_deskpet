@@ -23,12 +23,14 @@ import com.example.deskpet.util.feedFeedback
 import com.example.deskpet.util.generateRandomPet
 import com.example.deskpet.util.personalityFeedback
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DeskPetViewModel(application: Application) : AndroidViewModel(application) {
     private val backendClient = DeskPetBackendClient()
@@ -50,11 +52,17 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     private val _currentScreen = MutableStateFlow(AppScreen.Home)
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
 
-    private val _feedbackText = MutableStateFlow("轻轻点一点，看看它会怎么回应你。")
+    private val _feedbackText = MutableStateFlow("我在这里陪你～")
     val feedbackText: StateFlow<String> = _feedbackText.asStateFlow()
 
     private val _isSendingMessage = MutableStateFlow(false)
     val isSendingMessage: StateFlow<Boolean> = _isSendingMessage.asStateFlow()
+
+    private val _isFeeding = MutableStateFlow(false)
+    val isFeeding: StateFlow<Boolean> = _isFeeding.asStateFlow()
+
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
     private val _selectedDiaryEntryId = MutableStateFlow<String?>(null)
     val selectedDiaryEntryId: StateFlow<String?> = _selectedDiaryEntryId.asStateFlow()
@@ -65,39 +73,65 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     val backendUrl: String = backendClient.backendUrl()
 
     private var actionToken = 0
+    private var actionResetJob: Job? = null
+    private var feedbackResetJob: Job? = null
+    private var isTestingBackend = false
 
     init {
         viewModelScope.launch {
             val snapshot = repository.loadSnapshot()
-            _petProfile.value = snapshot.petProfile.copy(action = PetAction.Idle)
-            _petStatus.value = snapshot.petStatus
+            val loadedProfile = snapshot.petProfile.copy(
+                action = PetAction.Idle,
+                moodText = actionMoodText(PetAction.Idle, snapshot.petProfile.personality)
+            )
+            _petProfile.value = loadedProfile
+            _petStatus.value = snapshot.petStatus.clamped()
             _chatMessages.value = snapshot.chatMessages
             _diaryEntries.value = snapshot.diaryEntries.sortedByDescending { it.createdAt }
-            _feedbackText.value = _petProfile.value.moodText
+            restoreDefaultBubble()
             validateStoredImageUri()
         }
     }
 
     fun onPetClicked() {
-        if (_petProfile.value.action == PetAction.Eating) return
+        if (_isFeeding.value || _petProfile.value.action == PetAction.Eating) {
+            showTransientFeedback("它正在吃呢～")
+            return
+        }
+        if (_isSendingMessage.value) {
+            showTransientFeedback("我在认真听你说。")
+            return
+        }
+
         val profile = _petProfile.value
-        val action = if (profile.personality == Personality.Energetic) PetAction.Excited else PetAction.Happy
-        val token = beginAction(action)
+        val action = if (profile.personality == Personality.Energetic) {
+            PetAction.Excited
+        } else {
+            PetAction.Happy
+        }
         _petStatus.update { status ->
             status.copy(
                 mood = status.mood + 1,
                 intimacy = status.intimacy + 1
             ).clamped()
         }
-        _feedbackText.value = personalityFeedback(profile.personality)
+        startTransientAction(
+            action = action,
+            bubbleText = personalityFeedback(profile.personality),
+            durationMillis = 1500L
+        )
         persistPet()
-        resetActionLater(1500L, token)
     }
 
     fun feedPet() {
-        if (_petProfile.value.action == PetAction.Eating) return
+        if (_isFeeding.value || _petProfile.value.action == PetAction.Eating) {
+            showTransientFeedback("它正在吃呢～")
+            return
+        }
+
         val profile = _petProfile.value
-        val token = beginAction(PetAction.Eating)
+        val token = startPersistentAction(PetAction.Eating, feedFeedback(profile.personality))
+        _isFeeding.value = true
         _petStatus.update { status ->
             val moodBoost = if (profile.personality == Personality.Foodie) 8 else 5
             val hungerDrop = if (profile.personality == Personality.Foodie) 22 else 15
@@ -107,33 +141,51 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                 intimacy = status.intimacy + 2
             ).clamped()
         }
-        _feedbackText.value = feedFeedback(profile.personality)
         persistPet()
-        viewModelScope.launch {
+
+        actionResetJob = viewModelScope.launch {
             delay(2000L)
             if (token != actionToken) return@launch
             updateAction(PetAction.Happy)
+            _feedbackText.value = "吃饱啦，心情变好了。"
             persistPet()
-            delay(1100L)
-            if (token != actionToken) return@launch
-            updateAction(PetAction.Idle)
-            persistPet()
+
+            delay(800L)
+            resetToIdleIfCurrent(token)
         }
     }
 
     fun regeneratePet() {
+        if (_isUploading.value) {
+            showTransientFeedback("图片正在处理中，先等它完成。")
+            return
+        }
+        if (_isFeeding.value) {
+            showTransientFeedback("它正在吃呢，等一下再换新性格。")
+            return
+        }
         val currentImageUri = _petProfile.value.imageUri
         _petProfile.value = generateRandomPet(currentImageUri)
         _petStatus.value = defaultStatus()
-        _feedbackText.value = "新的小伙伴醒来啦，它好像有了新的性格。"
+        startTransientAction(
+            action = PetAction.Happy,
+            bubbleText = "新的小伙伴醒来啦，它好像有了新的性格。",
+            durationMillis = 1600L
+        )
         persistPet()
     }
 
     fun resetPet() {
+        cancelTransientState(resetAction = false)
+        imageStore.clearCache()
         _petProfile.value = generateRandomPet(currentImageUri = null)
         _petStatus.value = defaultStatus()
         _chatMessages.value = emptyList()
-        _feedbackText.value = "宠物已经重新开始新的陪伴旅程。"
+        startTransientAction(
+            action = PetAction.Happy,
+            bubbleText = "宠物已经重新开始新的陪伴旅程。",
+            durationMillis = 1600L
+        )
         viewModelScope.launch {
             repository.clearPetData()
             repository.saveChatMessages(emptyList())
@@ -142,73 +194,112 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearImageCache() {
+        if (_isUploading.value) {
+            showTransientFeedback("图片还在处理中，稍等一下就好。")
+            return
+        }
         imageStore.clearCache()
-        _petProfile.update { it.copy(imageUri = null) }
-        _feedbackText.value = "本地图片缓存已经清理。"
+        _petProfile.update {
+            it.copy(
+                imageUri = null,
+                action = PetAction.Idle,
+                moodText = actionMoodText(PetAction.Idle, it.personality)
+            )
+        }
+        restoreDefaultBubble()
+        showTransientFeedback("本地图片缓存已经清理。")
         persistPet()
     }
 
     fun testBackendConnection() {
+        if (isTestingBackend) return
+        isTestingBackend = true
         viewModelScope.launch {
             val ok = backendClient.checkHealth()
-            _feedbackText.value = if (ok) {
-                "后端连接正常。"
-            } else {
-                "暂时无法连接后端。"
-            }
+            showTransientFeedback(
+                if (ok) "后端连接正常。" else "暂时无法连接后端。"
+            )
+            isTestingBackend = false
         }
     }
 
     fun updatePetImage(uri: String) {
-        val token = beginAction(PetAction.Happy)
+        if (_isUploading.value) {
+            showTransientFeedback("图片正在处理中，马上就好。")
+            return
+        }
+        _isUploading.value = true
+        startTransientAction(
+            action = PetAction.Happy,
+            bubbleText = "宠物形象已更新。",
+            durationMillis = 1600L
+        )
+
         viewModelScope.launch {
-            val cachedUri = kotlinx.coroutines.withContext(Dispatchers.IO) {
-                imageStore.cacheImage(uri)
-            } ?: uri
+            try {
+                val cachedUri = withContext(Dispatchers.IO) {
+                    imageStore.cacheImage(uri)
+                } ?: uri
 
-            _petProfile.update {
-                it.copy(
-                    imageUri = cachedUri,
-                    moodText = actionMoodText(PetAction.Happy, it.personality)
-                )
-            }
-            _feedbackText.value = "宠物形象已更新。"
-            persistPet()
-
-            val response = backendClient.uploadPetImage(getApplication(), cachedUri)
-            if (response != null) {
-                _petProfile.update { profile ->
-                    profile.copy(
-                        name = response.petName.ifBlank { profile.name },
-                        personality = response.personality.toPersonalityOrNull() ?: profile.personality,
-                        expression = response.expression.ifBlank { profile.expression },
-                        decoration = response.decoration.ifBlank { profile.decoration },
-                        favoriteFood = response.favoriteFood.ifBlank { profile.favoriteFood },
-                        companionStyle = response.companionStyle.ifBlank { profile.companionStyle },
+                _petProfile.update {
+                    it.copy(
+                        imageUri = cachedUri,
                         action = PetAction.Happy,
-                        moodText = "它好像有了新的性格"
+                        moodText = actionMoodText(PetAction.Happy, it.personality)
                     )
                 }
-                _feedbackText.value = response.description.ifBlank { "宠物形象已更新，它好像有了新的性格。" }
-            } else {
-                val regenerated = generateRandomPet(_petProfile.value.imageUri)
-                _petProfile.update { profile ->
-                    profile.copy(
-                        name = regenerated.name,
-                        personality = regenerated.personality,
-                        expression = regenerated.expression,
-                        decoration = regenerated.decoration,
-                        favoriteFood = regenerated.favoriteFood,
-                        companionStyle = regenerated.companionStyle,
-                        seed = regenerated.seed,
+                persistPet()
+
+                val response = backendClient.uploadPetImage(getApplication(), cachedUri)
+                if (response != null) {
+                    _petProfile.update { profile ->
+                        profile.copy(
+                            name = response.petName.ifBlank { profile.name },
+                            personality = response.personality.toPersonalityOrNull() ?: profile.personality,
+                            expression = response.expression.ifBlank { profile.expression },
+                            decoration = response.decoration.ifBlank { profile.decoration },
+                            favoriteFood = response.favoriteFood.ifBlank { profile.favoriteFood },
+                            companionStyle = response.companionStyle.ifBlank { profile.companionStyle },
+                            stageTheme = response.stageTheme.ifBlank { profile.stageTheme },
+                            accentEmoji = response.accentEmoji.ifBlank { profile.accentEmoji },
+                            actionHint = response.actionHint.ifBlank { profile.actionHint },
+                            action = PetAction.Happy,
+                            moodText = actionMoodText(PetAction.Happy, response.personality.toPersonalityOrNull() ?: profile.personality)
+                        )
+                    }
+                    startTransientAction(
                         action = PetAction.Happy,
-                        moodText = "它好像有了新的性格"
+                        bubbleText = response.description.ifBlank { "宠物形象已更新，它好像有了新的性格。" },
+                        durationMillis = 1600L
+                    )
+                } else {
+                    val regenerated = generateRandomPet(_petProfile.value.imageUri)
+                    _petProfile.update { profile ->
+                        profile.copy(
+                            name = regenerated.name,
+                            personality = regenerated.personality,
+                            expression = regenerated.expression,
+                            decoration = regenerated.decoration,
+                            favoriteFood = regenerated.favoriteFood,
+                            companionStyle = regenerated.companionStyle,
+                            stageTheme = regenerated.stageTheme,
+                            accentEmoji = regenerated.accentEmoji,
+                            actionHint = regenerated.actionHint,
+                            seed = regenerated.seed,
+                            action = PetAction.Happy,
+                            moodText = actionMoodText(PetAction.Happy, regenerated.personality)
+                        )
+                    }
+                    startTransientAction(
+                        action = PetAction.Happy,
+                        bubbleText = "宠物形象已更新，后端暂时没连上，我先生成本地属性。",
+                        durationMillis = 1600L
                     )
                 }
-                _feedbackText.value = "宠物形象已更新，后端暂时没连上，已先生成本地属性。"
+                persistPet()
+            } finally {
+                _isUploading.value = false
             }
-            persistPet()
-            resetActionLater(1500L, token)
         }
     }
 
@@ -226,7 +317,7 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
 
         _chatMessages.update { it + userMessage }
         viewModelScope.launch { repository.saveChatMessages(_chatMessages.value) }
-        val token = beginAction(PetAction.Listening)
+        startPersistentAction(PetAction.Listening, "我在认真听你说。")
         _isSendingMessage.value = true
 
         viewModelScope.launch {
@@ -261,17 +352,17 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                     energy = it.energy - 1
                 ).clamped()
             }
-            if (token == actionToken) {
-                updateAction(PetAction.Comforting)
-            }
-            _feedbackText.value = if (backendResponse == null) {
-                "后端暂时没连上，我先陪你聊聊。"
-            } else {
-                "我把这段心情记下来了。"
-            }
             _isSendingMessage.value = false
+            startTransientAction(
+                action = PetAction.Comforting,
+                bubbleText = if (backendResponse == null) {
+                    "后端暂时没连上，我先陪你聊聊。"
+                } else {
+                    "我把这段心情记下来了。"
+                },
+                durationMillis = 2000L
+            )
             persistPet()
-            resetActionLater(1800L, token)
         }
     }
 
@@ -296,7 +387,7 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
             _selectedDiaryEntry.value = null
             _currentScreen.value = AppScreen.Diary
         }
-        _feedbackText.value = "这条日记已经轻轻收起来了。"
+        showTransientFeedback("这条日记已经轻轻收起来了。")
     }
 
     fun clearDiaryEntries() {
@@ -304,30 +395,38 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         _selectedDiaryEntryId.value = null
         _selectedDiaryEntry.value = null
         viewModelScope.launch { repository.saveDiaryEntries(emptyList()) }
-        _feedbackText.value = "日记已经清空。"
+        showTransientFeedback("日记已经清空。")
     }
 
     fun goToHome() {
         _currentScreen.value = AppScreen.Home
         if (!_isSendingMessage.value) {
-            actionToken += 1
-            updateAction(PetAction.Idle)
-            persistPet()
+            resetTransientStateToIdle()
+        } else {
+            _feedbackText.value = bubbleForAction(PetAction.Listening, _petProfile.value, _petStatus.value)
         }
     }
 
     fun goToChat() {
+        if (!_isSendingMessage.value) {
+            resetTransientStateToIdle()
+            startPersistentAction(PetAction.Listening, "我在认真听你说。")
+            persistPet()
+        }
         _currentScreen.value = AppScreen.Chat
-        beginAction(PetAction.Listening)
-        _feedbackText.value = "正在认真听你说话。"
-        persistPet()
     }
 
     fun goToDiary() {
+        if (!_isSendingMessage.value) {
+            resetTransientStateToIdle()
+        }
         _currentScreen.value = AppScreen.Diary
     }
 
     fun goToSettings() {
+        if (!_isSendingMessage.value) {
+            resetTransientStateToIdle()
+        }
         _currentScreen.value = AppScreen.Settings
     }
 
@@ -346,11 +445,15 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     }
 
     override fun onCleared() {
+        val profileToSave = _petProfile.value.copy(
+            action = PetAction.Idle,
+            moodText = actionMoodText(PetAction.Idle, _petProfile.value.personality)
+        )
         viewModelScope.launch {
             repository.saveAll(
                 DeskPetSnapshot(
-                    petProfile = _petProfile.value,
-                    petStatus = _petStatus.value,
+                    petProfile = profileToSave,
+                    petStatus = _petStatus.value.clamped(),
                     diaryEntries = _diaryEntries.value,
                     chatMessages = _chatMessages.value
                 )
@@ -359,10 +462,55 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         super.onCleared()
     }
 
-    private fun beginAction(action: PetAction): Int {
+    private fun startPersistentAction(action: PetAction, bubbleText: String): Int {
         actionToken += 1
+        actionResetJob?.cancel()
+        feedbackResetJob?.cancel()
+        if (action != PetAction.Eating) {
+            _isFeeding.value = false
+        }
         updateAction(action)
+        _feedbackText.value = bubbleText.ifBlank {
+            bubbleForAction(action, _petProfile.value, _petStatus.value)
+        }
         return actionToken
+    }
+
+    private fun startTransientAction(
+        action: PetAction,
+        bubbleText: String,
+        durationMillis: Long
+    ): Int {
+        val token = startPersistentAction(action, bubbleText)
+        actionResetJob = viewModelScope.launch {
+            delay(durationMillis)
+            resetToIdleIfCurrent(token)
+        }
+        return token
+    }
+
+    private fun resetToIdleIfCurrent(token: Int) {
+        if (token != actionToken) return
+        _isFeeding.value = false
+        updateAction(PetAction.Idle)
+        restoreDefaultBubble()
+        persistPet()
+    }
+
+    private fun resetTransientStateToIdle() {
+        cancelTransientState(resetAction = true)
+        persistPet()
+    }
+
+    private fun cancelTransientState(resetAction: Boolean) {
+        actionToken += 1
+        actionResetJob?.cancel()
+        feedbackResetJob?.cancel()
+        _isFeeding.value = false
+        if (resetAction) {
+            updateAction(PetAction.Idle)
+        }
+        restoreDefaultBubble()
     }
 
     private fun updateAction(action: PetAction) {
@@ -374,22 +522,25 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun resetActionLater(delayMillis: Long, token: Int) {
-        viewModelScope.launch {
-            delay(delayMillis)
-            if (token != actionToken) return@launch
-            if (_currentScreen.value == AppScreen.Chat && _isSendingMessage.value) {
-                updateAction(PetAction.Listening)
-            } else {
-                updateAction(PetAction.Idle)
+    private fun showTransientFeedback(text: String, durationMillis: Long = 1600L) {
+        feedbackResetJob?.cancel()
+        _feedbackText.value = text
+        val token = actionToken
+        feedbackResetJob = viewModelScope.launch {
+            delay(durationMillis)
+            if (token == actionToken) {
+                restoreDefaultBubble()
             }
-            persistPet()
         }
+    }
+
+    private fun restoreDefaultBubble() {
+        _feedbackText.value = bubbleForAction(_petProfile.value.action, _petProfile.value, _petStatus.value)
     }
 
     private fun persistPet() {
         viewModelScope.launch {
-            repository.savePet(_petProfile.value, _petStatus.value)
+            repository.savePet(_petProfile.value, _petStatus.value.clamped())
         }
     }
 
@@ -399,8 +550,8 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
             val canRead = imageStore.canRead(uriString)
             if (!canRead) {
                 _petProfile.update { it.copy(imageUri = null) }
-                _feedbackText.value = "之前的图片暂时无法读取，已先显示默认宠物。"
-                repository.savePet(_petProfile.value, _petStatus.value)
+                repository.savePet(_petProfile.value, _petStatus.value.clamped())
+                showTransientFeedback("之前的图片暂时无法读取，已先显示默认宠物。")
             }
         }
     }
@@ -414,6 +565,34 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
             moodTag == "生气" || text.hasAny("生气", "气") -> 1
             else -> 2
         }
+    }
+}
+
+private fun bubbleForAction(action: PetAction, profile: PetProfile, status: PetStatus): String {
+    return when (action) {
+        PetAction.Idle -> idleBubble(profile, status)
+        PetAction.Happy, PetAction.Clicked -> when (profile.personality) {
+            Personality.Tsundere -> "哼，只是刚好被你点到。"
+            else -> "嘿嘿，刚刚被你点到啦！"
+        }
+        PetAction.Eating -> "吃到喜欢的东西啦！"
+        PetAction.Listening -> "我在认真听你说。"
+        PetAction.Comforting -> "慢慢来，我陪你。"
+        PetAction.Sleepy -> "有点困了，想安静待一会儿。"
+        PetAction.Excited -> "今天也要一起加油！"
+    }
+}
+
+private fun idleBubble(profile: PetProfile, status: PetStatus): String {
+    return when {
+        status.energy <= 20 -> "有点困了，想安静待一会儿。"
+        status.hunger >= 78 -> "肚子有点空空的，但我还在这里。"
+        profile.personality == Personality.Gentle -> "今天也一起慢慢来。"
+        profile.personality == Personality.Energetic -> "我在这里陪你，随时可以出发！"
+        profile.personality == Personality.Shy -> "我安静地在这里陪你。"
+        profile.personality == Personality.Foodie -> "我在这里陪你～也惦记着小点心。"
+        profile.personality == Personality.Tsundere -> "我只是刚好待在这里啦。"
+        else -> "我在这里陪你～"
     }
 }
 

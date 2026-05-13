@@ -24,6 +24,9 @@ fun generateRandomPet(currentImageUri: String?): PetProfile {
         favoriteFood = favoriteFoodFor(personality),
         moodText = actionMoodText(PetAction.Idle, personality),
         companionStyle = companionStyleFor(personality),
+        stageTheme = stageThemeFor(personality),
+        accentEmoji = accentEmojiFor(personality),
+        actionHint = actionHintFor(personality),
         seed = seed,
         createdAt = now
     )
@@ -123,4 +126,28 @@ private fun companionStyleFor(personality: Personality): String = when (personal
     Personality.Shy -> "安静倾听"
     Personality.Foodie -> "用小点心安慰你"
     Personality.Tsundere -> "嘴硬但在乎你"
+}
+
+private fun stageThemeFor(personality: Personality): String = when (personality) {
+    Personality.Gentle -> "warm"
+    Personality.Energetic -> "starry"
+    Personality.Shy -> "cloud"
+    Personality.Foodie -> "candy"
+    Personality.Tsundere -> "forest"
+}
+
+private fun accentEmojiFor(personality: Personality): String = when (personality) {
+    Personality.Gentle -> "🌸"
+    Personality.Energetic -> "⭐"
+    Personality.Shy -> "☁️"
+    Personality.Foodie -> "🍬"
+    Personality.Tsundere -> "🍃"
+}
+
+private fun actionHintFor(personality: Personality): String = when (personality) {
+    Personality.Gentle -> "calm"
+    Personality.Energetic -> "bounce"
+    Personality.Shy -> "calm"
+    Personality.Foodie -> "sway"
+    Personality.Tsundere -> "tilt"
 }

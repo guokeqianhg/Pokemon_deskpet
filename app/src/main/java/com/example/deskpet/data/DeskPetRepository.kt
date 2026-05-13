@@ -176,6 +176,9 @@ class DeskPetRepository(context: Context) {
             favoriteFood = json.optString("favoriteFood", fallback.favoriteFood),
             moodText = json.optString("moodText", fallback.moodText),
             companionStyle = json.optString("companionStyle", fallback.companionStyle),
+            stageTheme = json.optString("stageTheme", fallback.stageTheme),
+            accentEmoji = json.optString("accentEmoji", fallback.accentEmoji),
+            actionHint = json.optString("actionHint", fallback.actionHint),
             seed = json.optLong("seed", fallback.seed),
             createdAt = json.optLong("createdAt", fallback.createdAt)
         )

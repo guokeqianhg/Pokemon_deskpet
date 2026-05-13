@@ -20,6 +20,7 @@ import com.example.deskpet.util.personalityDisplayName
 @Composable
 fun PetCard(
     profile: PetProfile,
+    bubbleText: String,
     onPetClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -29,7 +30,11 @@ fun PetCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            PetAvatar(profile = profile, onClick = onPetClicked)
+            PetStage(
+                profile = profile,
+                bubbleText = bubbleText,
+                onPetClicked = onPetClicked
+            )
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -37,9 +42,7 @@ fun PetCard(
                 InfoLine(label = "名字", value = profile.name)
                 InfoLine(label = "性格", value = personalityDisplayName(profile.personality))
                 InfoLine(label = "当前状态", value = actionDisplayName(profile.action))
-                InfoLine(label = "心情", value = profile.moodText)
                 InfoLine(label = "表情", value = profile.expression)
-                InfoLine(label = "装饰", value = profile.decoration)
                 InfoLine(label = "喜欢", value = profile.favoriteFood)
                 InfoLine(label = "陪伴风格", value = profile.companionStyle)
             }

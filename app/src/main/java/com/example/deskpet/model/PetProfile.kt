@@ -30,6 +30,9 @@ data class PetProfile(
     val favoriteFood: String,
     val moodText: String,
     val companionStyle: String,
+    val stageTheme: String,
+    val accentEmoji: String,
+    val actionHint: String,
     val seed: Long,
     val createdAt: Long
 )

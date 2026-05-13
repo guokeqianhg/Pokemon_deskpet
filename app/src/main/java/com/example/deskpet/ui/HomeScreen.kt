@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +31,8 @@ fun HomeScreen(
     petProfile: PetProfile,
     petStatus: PetStatus,
     feedbackText: String,
+    isFeeding: Boolean,
+    isUploading: Boolean,
     onPetClicked: () -> Unit,
     onFeedPet: () -> Unit,
     onRegeneratePet: () -> Unit,
@@ -63,19 +62,11 @@ fun HomeScreen(
         ) {
             PetCard(
                 profile = petProfile,
+                bubbleText = feedbackText,
                 onPetClicked = onPetClicked
             )
 
             PetStatusPanel(status = petStatus)
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = feedbackText,
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -86,18 +77,20 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     ActionButton(
-                        text = "投喂",
+                        text = if (isFeeding) "正在吃" else "投喂",
                         onClick = onFeedPet,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = !isFeeding
                     )
                     ActionButton(
-                        text = "上传图片",
+                        text = if (isUploading) "处理中" else "上传图片",
                         onClick = {
                             imagePicker.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = !isUploading
                     )
                 }
 

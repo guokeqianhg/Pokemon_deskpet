@@ -46,5 +46,8 @@ async def pet_from_image(file: UploadFile = File(...)) -> ImagePetResponse:
         decoration=result.decoration,
         favorite_food=result.favorite_food,
         companion_style=result.companion_style,
+        stage_theme=result.stage_theme,
+        accent_emoji=result.accent_emoji,
+        action_hint=result.action_hint,
         description=result.description,
     )

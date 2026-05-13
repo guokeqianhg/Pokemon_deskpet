@@ -24,6 +24,9 @@ data class BackendImageResponse(
     val decoration: String,
     val favoriteFood: String,
     val companionStyle: String,
+    val stageTheme: String,
+    val accentEmoji: String,
+    val actionHint: String,
     val description: String
 )
 
@@ -102,6 +105,9 @@ class DeskPetBackendClient(
                     decoration = json.optString("decoration", ""),
                     favoriteFood = json.optString("favorite_food", ""),
                     companionStyle = json.optString("companion_style", ""),
+                    stageTheme = json.optString("stage_theme", ""),
+                    accentEmoji = json.optString("accent_emoji", ""),
+                    actionHint = json.optString("action_hint", ""),
                     description = json.optString("description", "")
                 )
             }.getOrNull()

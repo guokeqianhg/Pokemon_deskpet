@@ -26,4 +26,7 @@ class ImagePetResponse(BaseModel):
     decoration: str
     favorite_food: str
     companion_style: str
+    stage_theme: str
+    accent_emoji: str
+    action_hint: str
     description: str

@@ -24,6 +24,9 @@ fun PetProfile.toEntity(): PetProfileEntity = PetProfileEntity(
     favoriteFood = favoriteFood,
     moodText = moodText,
     companionStyle = companionStyle,
+    stageTheme = stageTheme,
+    accentEmoji = accentEmoji,
+    actionHint = actionHint,
     seed = seed,
     createdAt = createdAt
 )
@@ -67,6 +70,9 @@ fun PetProfileEntity.toModel(): PetProfile {
         favoriteFood = favoriteFood,
         moodText = moodText,
         companionStyle = companionStyle,
+        stageTheme = stageTheme.ifBlank { fallback.stageTheme },
+        accentEmoji = accentEmoji.ifBlank { fallback.accentEmoji },
+        actionHint = actionHint.ifBlank { fallback.actionHint },
         seed = seed,
         createdAt = createdAt
     )
