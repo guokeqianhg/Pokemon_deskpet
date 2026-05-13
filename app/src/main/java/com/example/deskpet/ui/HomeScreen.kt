@@ -39,7 +39,8 @@ fun HomeScreen(
     onRegeneratePet: () -> Unit,
     onImageSelected: (String) -> Unit,
     onOpenChat: () -> Unit,
-    onOpenDiary: () -> Unit
+    onOpenDiary: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -123,6 +124,12 @@ fun HomeScreen(
                         outlined = true
                     )
                 }
+
+                ActionButton(
+                    text = "设置",
+                    onClick = onOpenSettings,
+                    outlined = true
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))

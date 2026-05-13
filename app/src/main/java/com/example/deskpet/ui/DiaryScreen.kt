@@ -36,6 +36,7 @@ import java.time.format.DateTimeFormatter
 fun DiaryScreen(
     entries: List<DiaryEntry>,
     onBack: () -> Unit,
+    onOpenDetail: (String) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onClearEntries: () -> Unit
 ) {
@@ -77,6 +78,7 @@ fun DiaryScreen(
             items(entries, key = { it.id }) { entry ->
                 DiaryCard(
                     entry = entry,
+                    onOpenDetail = { onOpenDetail(entry.id) },
                     onDelete = { onDeleteEntry(entry.id) }
                 )
             }
@@ -135,9 +137,13 @@ private fun EmptyDiaryState() {
 @Composable
 private fun DiaryCard(
     entry: DiaryEntry,
+    onOpenDetail: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onOpenDetail
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)

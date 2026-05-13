@@ -30,6 +30,20 @@ data class BackendImageResponse(
 class DeskPetBackendClient(
     private val baseUrl: String = "http://10.0.2.2:8000"
 ) {
+    fun backendUrl(): String = baseUrl
+
+    suspend fun checkHealth(): Boolean {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val response = openConnection("/health").apply {
+                    requestMethod = "GET"
+                    doOutput = false
+                }
+                response.responseCode in 200..299
+            }.getOrDefault(false)
+        }
+    }
+
     suspend fun sendChat(message: String, petProfile: PetProfile): BackendChatResponse? {
         return withContext(Dispatchers.IO) {
             runCatching {

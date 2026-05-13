@@ -11,8 +11,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.example.deskpet.model.AppScreen
 import com.example.deskpet.ui.ChatScreen
+import com.example.deskpet.ui.DiaryDetailScreen
 import com.example.deskpet.ui.DiaryScreen
 import com.example.deskpet.ui.HomeScreen
+import com.example.deskpet.ui.SettingsScreen
 import com.example.deskpet.ui.theme.DeskPetTheme
 import com.example.deskpet.viewmodel.DeskPetViewModel
 
@@ -39,6 +41,7 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
     val chatMessages by viewModel.chatMessages.collectAsState()
     val diaryEntries by viewModel.diaryEntries.collectAsState()
     val isSendingMessage by viewModel.isSendingMessage.collectAsState()
+    val selectedDiaryEntry by viewModel.selectedDiaryEntry.collectAsState()
 
     BackHandler(enabled = currentScreen != AppScreen.Home) {
         viewModel.onSystemBack()
@@ -54,7 +57,8 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
             onRegeneratePet = viewModel::regeneratePet,
             onImageSelected = viewModel::updatePetImage,
             onOpenChat = viewModel::goToChat,
-            onOpenDiary = viewModel::goToDiary
+            onOpenDiary = viewModel::goToDiary,
+            onOpenSettings = viewModel::goToSettings
         )
 
         AppScreen.Chat -> ChatScreen(
@@ -68,8 +72,24 @@ private fun DeskPetApp(viewModel: DeskPetViewModel) {
         AppScreen.Diary -> DiaryScreen(
             entries = diaryEntries,
             onBack = viewModel::goToHome,
+            onOpenDetail = viewModel::openDiaryDetail,
             onDeleteEntry = viewModel::deleteDiaryEntry,
             onClearEntries = viewModel::clearDiaryEntries
+        )
+
+        AppScreen.DiaryDetail -> DiaryDetailScreen(
+            entry = selectedDiaryEntry,
+            onBack = viewModel::closeDiaryDetail,
+            onDelete = viewModel::deleteDiaryEntry
+        )
+
+        AppScreen.Settings -> SettingsScreen(
+            backendUrl = viewModel.backendUrl,
+            onBack = viewModel::goToHome,
+            onTestBackend = viewModel::testBackendConnection,
+            onClearDiary = viewModel::clearDiaryEntries,
+            onResetPet = viewModel::resetPet,
+            onClearImageCache = viewModel::clearImageCache
         )
     }
 }

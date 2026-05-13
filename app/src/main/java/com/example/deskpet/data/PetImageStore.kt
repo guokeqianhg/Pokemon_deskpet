@@ -32,6 +32,12 @@ class PetImageStore(private val context: Context) {
         }.getOrDefault(false)
     }
 
+    fun clearCache() {
+        runCatching {
+            File(context.filesDir, IMAGE_DIRECTORY).deleteRecursively()
+        }
+    }
+
     private companion object {
         const val IMAGE_DIRECTORY = "pet_images"
         const val IMAGE_FILE_NAME = "current_pet_image.jpg"

@@ -3,9 +3,9 @@ package com.example.deskpet.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.deskpet.data.PetImageStore
 import com.example.deskpet.data.DeskPetRepository
 import com.example.deskpet.data.DeskPetSnapshot
+import com.example.deskpet.data.PetImageStore
 import com.example.deskpet.model.AppScreen
 import com.example.deskpet.model.ChatMessage
 import com.example.deskpet.model.DiaryEntry
@@ -34,33 +34,48 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     private val backendClient = DeskPetBackendClient()
     private val repository = DeskPetRepository(application)
     private val imageStore = PetImageStore(application)
-    private val initialSnapshot = repository.loadSnapshot()
 
-    private val _petProfile = MutableStateFlow(initialSnapshot.petProfile.copy(action = PetAction.Idle))
+    private val _petProfile = MutableStateFlow(generateRandomPet(currentImageUri = null))
     val petProfile: StateFlow<PetProfile> = _petProfile.asStateFlow()
 
-    private val _petStatus = MutableStateFlow(initialSnapshot.petStatus)
+    private val _petStatus = MutableStateFlow(defaultStatus())
     val petStatus: StateFlow<PetStatus> = _petStatus.asStateFlow()
 
-    private val _chatMessages = MutableStateFlow(initialSnapshot.chatMessages)
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
 
-    private val _diaryEntries = MutableStateFlow(initialSnapshot.diaryEntries.sortedByDescending { it.createdAt })
+    private val _diaryEntries = MutableStateFlow<List<DiaryEntry>>(emptyList())
     val diaryEntries: StateFlow<List<DiaryEntry>> = _diaryEntries.asStateFlow()
 
     private val _currentScreen = MutableStateFlow(AppScreen.Home)
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
 
-    private val _feedbackText = MutableStateFlow(_petProfile.value.moodText)
+    private val _feedbackText = MutableStateFlow("轻轻点一点，看看它会怎么回应你。")
     val feedbackText: StateFlow<String> = _feedbackText.asStateFlow()
 
     private val _isSendingMessage = MutableStateFlow(false)
     val isSendingMessage: StateFlow<Boolean> = _isSendingMessage.asStateFlow()
 
+    private val _selectedDiaryEntryId = MutableStateFlow<String?>(null)
+    val selectedDiaryEntryId: StateFlow<String?> = _selectedDiaryEntryId.asStateFlow()
+
+    private val _selectedDiaryEntry = MutableStateFlow<DiaryEntry?>(null)
+    val selectedDiaryEntry: StateFlow<DiaryEntry?> = _selectedDiaryEntry.asStateFlow()
+
+    val backendUrl: String = backendClient.backendUrl()
+
     private var actionToken = 0
 
     init {
-        validateStoredImageUri()
+        viewModelScope.launch {
+            val snapshot = repository.loadSnapshot()
+            _petProfile.value = snapshot.petProfile.copy(action = PetAction.Idle)
+            _petStatus.value = snapshot.petStatus
+            _chatMessages.value = snapshot.chatMessages
+            _diaryEntries.value = snapshot.diaryEntries.sortedByDescending { it.createdAt }
+            _feedbackText.value = _petProfile.value.moodText
+            validateStoredImageUri()
+        }
     }
 
     fun onPetClicked() {
@@ -114,9 +129,38 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         persistPet()
     }
 
+    fun resetPet() {
+        _petProfile.value = generateRandomPet(currentImageUri = null)
+        _petStatus.value = defaultStatus()
+        _chatMessages.value = emptyList()
+        _feedbackText.value = "宠物已经重新开始新的陪伴旅程。"
+        viewModelScope.launch {
+            repository.clearPetData()
+            repository.saveChatMessages(emptyList())
+            persistPet()
+        }
+    }
+
+    fun clearImageCache() {
+        imageStore.clearCache()
+        _petProfile.update { it.copy(imageUri = null) }
+        _feedbackText.value = "本地图片缓存已经清理。"
+        persistPet()
+    }
+
+    fun testBackendConnection() {
+        viewModelScope.launch {
+            val ok = backendClient.checkHealth()
+            _feedbackText.value = if (ok) {
+                "后端连接正常。"
+            } else {
+                "暂时无法连接后端。"
+            }
+        }
+    }
+
     fun updatePetImage(uri: String) {
         val token = beginAction(PetAction.Happy)
-
         viewModelScope.launch {
             val cachedUri = kotlinx.coroutines.withContext(Dispatchers.IO) {
                 imageStore.cacheImage(uri)
@@ -181,7 +225,7 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         )
 
         _chatMessages.update { it + userMessage }
-        repository.saveChatMessages(_chatMessages.value)
+        viewModelScope.launch { repository.saveChatMessages(_chatMessages.value) }
         val token = beginAction(PetAction.Listening)
         _isSendingMessage.value = true
 
@@ -231,15 +275,35 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun openDiaryDetail(entryId: String) {
+        _selectedDiaryEntryId.value = entryId
+        _selectedDiaryEntry.value = _diaryEntries.value.firstOrNull { it.id == entryId }
+        _currentScreen.value = AppScreen.DiaryDetail
+        viewModelScope.launch {
+            _selectedDiaryEntry.value = repository.getDiaryEntry(entryId) ?: _selectedDiaryEntry.value
+        }
+    }
+
+    fun closeDiaryDetail() {
+        _currentScreen.value = AppScreen.Diary
+    }
+
     fun deleteDiaryEntry(entryId: String) {
         _diaryEntries.update { entries -> entries.filterNot { it.id == entryId } }
-        repository.saveDiaryEntries(_diaryEntries.value)
+        viewModelScope.launch { repository.saveDiaryEntries(_diaryEntries.value) }
+        if (_selectedDiaryEntryId.value == entryId) {
+            _selectedDiaryEntryId.value = null
+            _selectedDiaryEntry.value = null
+            _currentScreen.value = AppScreen.Diary
+        }
         _feedbackText.value = "这条日记已经轻轻收起来了。"
     }
 
     fun clearDiaryEntries() {
         _diaryEntries.value = emptyList()
-        repository.saveDiaryEntries(emptyList())
+        _selectedDiaryEntryId.value = null
+        _selectedDiaryEntry.value = null
+        viewModelScope.launch { repository.saveDiaryEntries(emptyList()) }
         _feedbackText.value = "日记已经清空。"
     }
 
@@ -263,24 +327,35 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         _currentScreen.value = AppScreen.Diary
     }
 
+    fun goToSettings() {
+        _currentScreen.value = AppScreen.Settings
+    }
+
     fun onSystemBack(): Boolean {
-        return if (_currentScreen.value == AppScreen.Home) {
-            false
-        } else {
-            goToHome()
-            true
+        return when (_currentScreen.value) {
+            AppScreen.Home -> false
+            AppScreen.DiaryDetail -> {
+                closeDiaryDetail()
+                true
+            }
+            else -> {
+                goToHome()
+                true
+            }
         }
     }
 
     override fun onCleared() {
-        repository.saveAll(
-            DeskPetSnapshot(
-                petProfile = _petProfile.value,
-                petStatus = _petStatus.value,
-                diaryEntries = _diaryEntries.value,
-                chatMessages = _chatMessages.value
+        viewModelScope.launch {
+            repository.saveAll(
+                DeskPetSnapshot(
+                    petProfile = _petProfile.value,
+                    petStatus = _petStatus.value,
+                    diaryEntries = _diaryEntries.value,
+                    chatMessages = _chatMessages.value
+                )
             )
-        )
+        }
         super.onCleared()
     }
 
@@ -313,7 +388,9 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun persistPet() {
-        repository.savePet(_petProfile.value, _petStatus.value)
+        viewModelScope.launch {
+            repository.savePet(_petProfile.value, _petStatus.value)
+        }
     }
 
     private fun validateStoredImageUri() {
@@ -323,7 +400,7 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
             if (!canRead) {
                 _petProfile.update { it.copy(imageUri = null) }
                 _feedbackText.value = "之前的图片暂时无法读取，已先显示默认宠物。"
-                persistPet()
+                repository.savePet(_petProfile.value, _petStatus.value)
             }
         }
     }

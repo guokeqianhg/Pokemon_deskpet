@@ -1,6 +1,9 @@
 package com.example.deskpet.data
 
 import android.content.Context
+import com.example.deskpet.data.local.DeskPetDatabase
+import com.example.deskpet.data.local.toEntity
+import com.example.deskpet.data.local.toModel
 import com.example.deskpet.model.ChatMessage
 import com.example.deskpet.model.DiaryEntry
 import com.example.deskpet.model.MessageRole
@@ -10,6 +13,8 @@ import com.example.deskpet.model.PetProfile
 import com.example.deskpet.model.PetStatus
 import com.example.deskpet.util.defaultStatus
 import com.example.deskpet.util.generateRandomPet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,8 +27,123 @@ data class DeskPetSnapshot(
 
 class DeskPetRepository(context: Context) {
     private val preferences = context.getSharedPreferences("deskpet_store", Context.MODE_PRIVATE)
+    private val database = DeskPetDatabase.createOrNull(context)
 
-    fun loadSnapshot(): DeskPetSnapshot {
+    suspend fun loadSnapshot(): DeskPetSnapshot {
+        return withContext(Dispatchers.IO) {
+            val roomSnapshot = loadFromRoom()
+            if (roomSnapshot != null) {
+                roomSnapshot
+            } else {
+                migrateLegacyIfNeeded() ?: loadLegacySnapshot()
+            }
+        }
+    }
+
+    suspend fun savePet(profile: PetProfile, status: PetStatus) {
+        withContext(Dispatchers.IO) {
+            database?.petDao()?.runCatching {
+                upsertPetProfile(profile.toEntity())
+                upsertPetStatus(status.clamped().toEntity())
+            }
+        }
+    }
+
+    suspend fun saveDiaryEntries(entries: List<DiaryEntry>) {
+        withContext(Dispatchers.IO) {
+            database?.diaryDao()?.runCatching {
+                clearAllEntries()
+                upsertEntries(entries.map { it.toEntity() })
+            }
+        }
+    }
+
+    suspend fun saveChatMessages(messages: List<ChatMessage>) {
+        withContext(Dispatchers.IO) {
+            database?.chatDao()?.runCatching {
+                clearMessages()
+                upsertMessages(messages.takeLast(MAX_MESSAGES).map { it.toEntity() })
+            }
+        }
+    }
+
+    suspend fun saveAll(snapshot: DeskPetSnapshot) {
+        withContext(Dispatchers.IO) {
+            database?.runCatching {
+                petDao().upsertPetProfile(snapshot.petProfile.toEntity())
+                petDao().upsertPetStatus(snapshot.petStatus.clamped().toEntity())
+                diaryDao().clearAllEntries()
+                diaryDao().upsertEntries(snapshot.diaryEntries.map { it.toEntity() })
+                chatDao().clearMessages()
+                chatDao().upsertMessages(snapshot.chatMessages.takeLast(MAX_MESSAGES).map { it.toEntity() })
+            }
+        }
+    }
+
+    suspend fun getDiaryEntry(entryId: String): DiaryEntry? {
+        return withContext(Dispatchers.IO) {
+            database?.diaryDao()?.runCatching { getEntryById(entryId)?.toModel() }?.getOrNull()
+        }
+    }
+
+    suspend fun clearPetData() {
+        withContext(Dispatchers.IO) {
+            database?.petDao()?.runCatching {
+                clearPetProfile()
+                clearPetStatus()
+            }
+        }
+    }
+
+    private suspend fun loadFromRoom(): DeskPetSnapshot? {
+        return withContext(Dispatchers.IO) {
+            database?.runCatching {
+                val profile = petDao().getPetProfile()
+                val status = petDao().getPetStatus()
+                val diaries = diaryDao().getAllEntries()
+                val chats = chatDao().getAllMessages()
+
+                if (profile == null && status == null && diaries.isEmpty() && chats.isEmpty()) {
+                    null
+                } else {
+                    DeskPetSnapshot(
+                        petProfile = profile?.toModel() ?: generateRandomPet(currentImageUri = null),
+                        petStatus = status?.toModel() ?: defaultStatus(),
+                        diaryEntries = diaries.map { it.toModel() }.sortedByDescending { it.createdAt },
+                        chatMessages = chats.map { it.toModel() }
+                    )
+                }
+            }?.getOrNull()
+        }
+    }
+
+    private suspend fun migrateLegacyIfNeeded(): DeskPetSnapshot? {
+        if (database == null) return null
+        if (preferences.getBoolean(KEY_MIGRATION_DONE, false)) {
+            return loadLegacySnapshot()
+        }
+
+        val legacy = loadLegacySnapshot()
+        val hasLegacyData = preferences.contains(KEY_PROFILE) ||
+            preferences.contains(KEY_STATUS) ||
+            preferences.contains(KEY_DIARIES) ||
+            preferences.contains(KEY_MESSAGES)
+
+        if (!hasLegacyData) {
+            preferences.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
+            return null
+        }
+
+        return runCatching {
+            saveAll(legacy)
+            preferences.edit().putBoolean(KEY_MIGRATION_DONE, true).apply()
+            loadFromRoom() ?: legacy
+        }.getOrElse {
+            legacy
+        }
+    }
+
+    private fun loadLegacySnapshot(): DeskPetSnapshot {
         val profile = preferences.getString(KEY_PROFILE, null)
             ?.let { runCatching { parsePetProfile(JSONObject(it)) }.getOrNull() }
             ?: generateRandomPet(currentImageUri = null)
@@ -40,92 +160,7 @@ class DeskPetRepository(context: Context) {
             ?.let { runCatching { parseChatMessages(JSONArray(it)) }.getOrNull() }
             ?: emptyList()
 
-        return DeskPetSnapshot(profile, status.clamped(), diaries, messages)
-    }
-
-    fun savePet(profile: PetProfile, status: PetStatus) {
-        runCatching {
-            preferences.edit()
-                .putString(KEY_PROFILE, profile.toJson().toString())
-                .putString(KEY_STATUS, status.clamped().toJson().toString())
-                .apply()
-        }
-    }
-
-    fun saveDiaryEntries(entries: List<DiaryEntry>) {
-        runCatching {
-            preferences.edit()
-                .putString(KEY_DIARIES, entries.toDiaryJson().toString())
-                .apply()
-        }
-    }
-
-    fun saveChatMessages(messages: List<ChatMessage>) {
-        runCatching {
-            preferences.edit()
-                .putString(KEY_MESSAGES, messages.takeLast(MAX_MESSAGES).toChatJson().toString())
-                .apply()
-        }
-    }
-
-    fun saveAll(snapshot: DeskPetSnapshot) {
-        runCatching {
-            preferences.edit()
-                .putString(KEY_PROFILE, snapshot.petProfile.toJson().toString())
-                .putString(KEY_STATUS, snapshot.petStatus.clamped().toJson().toString())
-                .putString(KEY_DIARIES, snapshot.diaryEntries.toDiaryJson().toString())
-                .putString(KEY_MESSAGES, snapshot.chatMessages.takeLast(MAX_MESSAGES).toChatJson().toString())
-                .apply()
-        }
-    }
-
-    private fun PetProfile.toJson(): JSONObject = JSONObject()
-        .put("id", id)
-        .put("name", name)
-        .put("imageUri", imageUri)
-        .put("personality", personality.name)
-        .put("action", action.name)
-        .put("expression", expression)
-        .put("decoration", decoration)
-        .put("favoriteFood", favoriteFood)
-        .put("moodText", moodText)
-        .put("companionStyle", companionStyle)
-        .put("seed", seed)
-        .put("createdAt", createdAt)
-
-    private fun PetStatus.toJson(): JSONObject = JSONObject()
-        .put("mood", mood)
-        .put("hunger", hunger)
-        .put("energy", energy)
-        .put("intimacy", intimacy)
-
-    private fun DiaryEntry.toJson(): JSONObject = JSONObject()
-        .put("id", id)
-        .put("petId", petId)
-        .put("petName", petName)
-        .put("petPersonality", petPersonality.name)
-        .put("userText", userText)
-        .put("petReply", petReply)
-        .put("summary", summary)
-        .put("moodTag", moodTag)
-        .put("createdAt", createdAt)
-
-    private fun ChatMessage.toJson(): JSONObject = JSONObject()
-        .put("id", id)
-        .put("role", role.name)
-        .put("text", text)
-        .put("createdAt", createdAt)
-
-    private fun List<DiaryEntry>.toDiaryJson(): JSONArray {
-        val array = JSONArray()
-        forEach { array.put(it.toJson()) }
-        return array
-    }
-
-    private fun List<ChatMessage>.toChatJson(): JSONArray {
-        val array = JSONArray()
-        forEach { array.put(it.toJson()) }
-        return array
+        return DeskPetSnapshot(profile, status.clamped(), diaries.sortedByDescending { it.createdAt }, messages)
     }
 
     private fun parsePetProfile(json: JSONObject): PetProfile {
@@ -211,6 +246,7 @@ class DeskPetRepository(context: Context) {
         const val KEY_STATUS = "pet_status"
         const val KEY_DIARIES = "diary_entries"
         const val KEY_MESSAGES = "chat_messages"
+        const val KEY_MIGRATION_DONE = "room_migration_done"
         const val MAX_MESSAGES = 100
     }
 }
