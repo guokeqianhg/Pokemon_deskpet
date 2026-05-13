@@ -34,6 +34,15 @@ class ImagePetResult:
     description: str
 
 
+@dataclass(frozen=True)
+class CutoutResult:
+    success: bool
+    mode: str
+    message: str
+    suggested_crop: str
+    confidence: float
+
+
 def build_chat_reply(message: str, personality: str) -> ChatResult:
     text = message.strip()
     prefix = _reply_prefix(personality)
@@ -95,6 +104,16 @@ def build_pet_from_image(filename: str, content: bytes) -> ImagePetResult:
         accent_emoji=accent_emoji,
         action_hint=action_hint,
         description=f"已根据 {filename or '用户图片'} 生成一个{PERSONALITY_NAMES[personality]}风格的桌面宠物占位结果。",
+    )
+
+
+def build_pet_cutout(filename: str, content: bytes) -> CutoutResult:
+    return CutoutResult(
+        success=True,
+        mode="soft_cutout",
+        message="当前使用本地主体化展示，后续可接入真实抠图模型",
+        suggested_crop="center",
+        confidence=0.5 if content or filename else 0.0,
     )
 
 

@@ -28,10 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +51,7 @@ fun PetStage(
     modifier: Modifier = Modifier
 ) {
     val colors = stageColors(profile.stageTheme)
+    val imageMode = if (profile.imageUri != null) PetImageMode.SoftCutout else PetImageMode.CirclePet
     val infiniteTransition = rememberInfiniteTransition(label = "pet-stage-motion")
     val floatRange = movementRange(profile.personality, profile.actionHint)
     val floatOffset by infiniteTransition.animateFloat(
@@ -145,9 +148,19 @@ fun PetStage(
                     .background(Color.Black)
             )
 
+            if (profile.imageUri != null) {
+                SoftImageGlow(
+                    imageUri = profile.imageUri,
+                    profile = profile,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(y = floatOffset.dp)
+                )
+            }
+
             Box(
                 modifier = Modifier
-                    .size(width = 222.dp, height = 246.dp)
+                    .size(imageMode.width, imageMode.height)
                     .offset(
                         x = if (profile.action == PetAction.Eating || profile.action == PetAction.Excited) shake.dp else 0.dp,
                         y = floatOffset.dp
@@ -157,9 +170,10 @@ fun PetStage(
                         scaleY = breathe * actionScale
                         rotationZ = rotation
                     }
-                    .shadow(20.dp, RoundedCornerShape(30.dp), clip = false)
-                    .clip(RoundedCornerShape(30.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                    .shadow(22.dp, imageMode.shape, clip = false)
+                    .clip(imageMode.shape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.74f))
+                    .softEdgeFade(imageMode)
                     .clickable(onClick = onPetClicked),
                 contentAlignment = Alignment.Center
             ) {
@@ -168,7 +182,7 @@ fun PetStage(
                         model = profile.imageUri,
                         contentDescription = "宠物图片",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
+                        contentScale = imageMode.contentScale,
                         loading = { DefaultPetFace(profile) },
                         error = { DefaultPetFace(profile) }
                     )
@@ -208,6 +222,38 @@ fun PetStage(
 }
 
 @Composable
+private fun SoftImageGlow(
+    imageUri: String,
+    profile: PetProfile,
+    modifier: Modifier = Modifier
+) {
+    SubcomposeAsyncImage(
+        model = imageUri,
+        contentDescription = null,
+        modifier = modifier
+            .size(width = 250.dp, height = 274.dp)
+            .graphicsLayer {
+                alpha = 0.22f
+                scaleX = 1.1f
+                scaleY = 1.1f
+            }
+            .clip(RoundedCornerShape(46.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.28f)),
+        contentScale = ContentScale.Crop,
+        loading = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.16f))
+            )
+        },
+        error = {
+            DefaultPetFace(profile)
+        }
+    )
+}
+
+@Composable
 private fun DefaultPetFace(profile: PetProfile) {
     Column(
         modifier = Modifier
@@ -231,6 +277,55 @@ private fun DefaultPetFace(profile: PetProfile) {
         )
         Text(text = profile.expression)
         Text(text = profile.favoriteFood)
+    }
+}
+
+private val PetImageMode.width
+    get() = when (this) {
+        PetImageMode.FullCard -> 222.dp
+        PetImageMode.PortraitCrop -> 214.dp
+        PetImageMode.SoftCutout -> 214.dp
+        PetImageMode.CirclePet -> 218.dp
+    }
+
+private val PetImageMode.height
+    get() = when (this) {
+        PetImageMode.FullCard -> 246.dp
+        PetImageMode.PortraitCrop -> 248.dp
+        PetImageMode.SoftCutout -> 256.dp
+        PetImageMode.CirclePet -> 218.dp
+    }
+
+private val PetImageMode.shape: Shape
+    get() = when (this) {
+        PetImageMode.FullCard -> RoundedCornerShape(30.dp)
+        PetImageMode.PortraitCrop -> RoundedCornerShape(42.dp)
+        PetImageMode.SoftCutout -> RoundedCornerShape(percent = 44)
+        PetImageMode.CirclePet -> CircleShape
+    }
+
+private val PetImageMode.contentScale: ContentScale
+    get() = when (this) {
+        PetImageMode.FullCard -> ContentScale.Crop
+        PetImageMode.PortraitCrop -> ContentScale.Crop
+        PetImageMode.SoftCutout -> ContentScale.Crop
+        PetImageMode.CirclePet -> ContentScale.Crop
+    }
+
+private fun Modifier.softEdgeFade(mode: PetImageMode): Modifier {
+    if (mode == PetImageMode.FullCard) return this
+    return drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    Color.Transparent,
+                    Color.White.copy(alpha = 0.18f)
+                ),
+                radius = size.maxDimension * 0.72f
+            )
+        )
     }
 }
 

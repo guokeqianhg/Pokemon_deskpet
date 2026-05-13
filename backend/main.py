@@ -1,8 +1,8 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.schemas import ChatRequest, ChatResponse, ImagePetResponse
-from backend.services import build_chat_reply, build_pet_from_image
+from backend.schemas import ChatRequest, ChatResponse, CutoutResponse, ImagePetResponse
+from backend.services import build_chat_reply, build_pet_cutout, build_pet_from_image
 
 
 app = FastAPI(title="DeskPet Backend", version="0.1.0")
@@ -50,4 +50,17 @@ async def pet_from_image(file: UploadFile = File(...)) -> ImagePetResponse:
         accent_emoji=result.accent_emoji,
         action_hint=result.action_hint,
         description=result.description,
+    )
+
+
+@app.post("/api/pet/cutout", response_model=CutoutResponse)
+async def pet_cutout(file: UploadFile = File(...)) -> CutoutResponse:
+    content = await file.read()
+    result = build_pet_cutout(file.filename or "", content)
+    return CutoutResponse(
+        success=result.success,
+        mode=result.mode,
+        message=result.message,
+        suggested_crop=result.suggested_crop,
+        confidence=result.confidence,
     )

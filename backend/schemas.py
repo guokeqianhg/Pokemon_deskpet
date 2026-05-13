@@ -30,3 +30,11 @@ class ImagePetResponse(BaseModel):
     accent_emoji: str
     action_hint: str
     description: str
+
+
+class CutoutResponse(BaseModel):
+    success: bool
+    mode: str
+    message: str
+    suggested_crop: str = "center"
+    confidence: float = 0.5

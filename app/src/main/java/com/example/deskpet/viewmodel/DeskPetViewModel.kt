@@ -118,7 +118,7 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         startTransientAction(
             action = action,
             bubbleText = personalityFeedback(profile.personality),
-            durationMillis = 1500L
+            durationMillis = 900L
         )
         persistPet()
     }
@@ -231,8 +231,8 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
         _isUploading.value = true
         startTransientAction(
             action = PetAction.Happy,
-            bubbleText = "宠物形象已更新。",
-            durationMillis = 1600L
+            bubbleText = "我帮它整理成宠物形象啦～",
+            durationMillis = 1200L
         )
 
         viewModelScope.launch {
@@ -269,8 +269,8 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                     }
                     startTransientAction(
                         action = PetAction.Happy,
-                        bubbleText = response.description.ifBlank { "宠物形象已更新，它好像有了新的性格。" },
-                        durationMillis = 1600L
+                        bubbleText = response.description.ifBlank { "它看起来更像一个小伙伴了。" },
+                        durationMillis = 1200L
                     )
                 } else {
                     val regenerated = generateRandomPet(_petProfile.value.imageUri)
@@ -292,8 +292,8 @@ class DeskPetViewModel(application: Application) : AndroidViewModel(application)
                     }
                     startTransientAction(
                         action = PetAction.Happy,
-                        bubbleText = "宠物形象已更新，后端暂时没连上，我先生成本地属性。",
-                        durationMillis = 1600L
+                        bubbleText = "先用柔和主体模式展示，之后还能升级成真正抠图哦。",
+                        durationMillis = 1200L
                     )
                 }
                 persistPet()
